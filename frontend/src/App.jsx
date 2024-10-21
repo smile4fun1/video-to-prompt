@@ -6,7 +6,7 @@ import { faRobot, faSpinner, faUpload, faFileVideo, faCopy, faTrashAlt, faEnvelo
 import { faTwitter, faLinkedin, faGithub } from '@fortawesome/free-brands-svg-icons';
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
-const BACKEND_URL = 'https://video-to-prompt.onrender.com';
+const BACKEND_URL = 'https://frame-insight-ai.onrender.com';
 
 const loadingMessages = [
   "Initializing neural network pathways...",
@@ -33,6 +33,7 @@ function App() {
   const [showFooter, setShowFooter] = useState(true);
   const [analysisStarted, setAnalysisStarted] = useState(false);
   const footerRef = useRef(null);
+  const [isFirstUpload, setIsFirstUpload] = useState(true);
 
   useEffect(() => {
     fetchAnalysisTypes();
@@ -145,7 +146,7 @@ function App() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!file) {
+    if (!file && isFirstUpload) {
       setError('Please select a file');
       return;
     }
@@ -156,7 +157,9 @@ function App() {
     setShowFooter(false);
 
     const formData = new FormData();
-    formData.append('file', file);
+    if (file) {
+      formData.append('file', file);
+    }
     formData.append('analysis_type', analysisType);
     if (analysisType === 'custom') {
       formData.append('custom_prompt', customPrompt);
@@ -171,6 +174,7 @@ function App() {
         },
       });
       setResult(response.data);
+      setIsFirstUpload(false);
     } catch (error) {
       setError(error.response?.data?.detail || 'An error occurred during processing');
     } finally {
@@ -280,17 +284,19 @@ function App() {
           </div>
         </header>
         <form onSubmit={handleSubmit} className="upload-form">
-          <div className="form-group">
-            <label htmlFor="file-upload">
-              <FontAwesomeIcon icon={faFileVideo} /> Select Video File:
-            </label>
-            <input
-              id="file-upload"
-              type="file"
-              onChange={(e) => setFile(e.target.files[0])}
-              accept="video/*"
-            />
-          </div>
+          {isFirstUpload && (
+            <div className="form-group">
+              <label htmlFor="file-upload">
+                <FontAwesomeIcon icon={faFileVideo} /> Select Video File:
+              </label>
+              <input
+                id="file-upload"
+                type="file"
+                onChange={(e) => setFile(e.target.files[0])}
+                accept="video/*"
+              />
+            </div>
+          )}
           <div className="form-group">
             <label htmlFor="analysis-type">Select Analysis Type:</label>
             <select
@@ -312,7 +318,8 @@ function App() {
                 </>
               ) : (
                 <>
-                  <FontAwesomeIcon icon={faUpload} /> Upload and Analyze
+                  <FontAwesomeIcon icon={isFirstUpload ? faUpload : faRobot} /> 
+                  {isFirstUpload ? 'Upload and Analyze' : 'Analyze'}
                 </>
               )}
             </button>
