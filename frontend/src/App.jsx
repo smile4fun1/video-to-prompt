@@ -6,7 +6,7 @@ import { faRobot, faSpinner, faUpload, faFileVideo, faCopy, faTrashAlt, faEnvelo
 import { faTwitter, faLinkedin, faGithub } from '@fortawesome/free-brands-svg-icons';
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
-const BACKEND_URL = 'http://127.0.0.1:8000';
+const BACKEND_URL = 'https://video-to-prompt.onrender.com';
 
 const loadingMessages = [
   "Initializing neural network pathways...",
@@ -119,64 +119,31 @@ function App() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!file) {
-      setError('Please select a video file.');
+      setError('Please select a file');
       return;
     }
-
     setLoading(true);
     setError(null);
-    setProgress(0);
     setResult(null);
 
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('analysis_type', analysisType);
+    if (analysisType === 'custom') {
+      formData.append('custom_prompt', customPrompt);
+    }
+
     try {
-      if (file.size <= CHUNK_SIZE) {
-        // Small file, upload in one go
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('analysis_type', analysisType);
-        formData.append('custom_prompt', customPrompt);
-        
-        const response = await axios.post(`${BACKEND_URL}/upload`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-          onUploadProgress: (progressEvent) => {
-            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-            setProgress(percentCompleted);
-          },
-        });
-        
-        setResult({
-          ...response.data,
-          analysis_type: analysisType,  // Ensure we store the analysis type used
-          custom_prompt: customPrompt
-        });
-      } else {
-        // Large file, use chunked upload
-        const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-        let combinedResult = [];
-
-        for (let chunkNumber = 1; chunkNumber <= totalChunks; chunkNumber++) {
-          const start = (chunkNumber - 1) * CHUNK_SIZE;
-          const end = Math.min(start + CHUNK_SIZE, file.size);
-          const chunk = file.slice(start, end);
-
-          const chunkResult = await uploadChunk(chunk, chunkNumber, totalChunks);
-          if (chunkResult.error) {
-            throw new Error(chunkResult.error);
-          }
-          combinedResult.push(chunkResult);
-        }
-
-        setResult({
-          filename: file.name,
-          analysis_type: analysisType,  // Ensure we store the analysis type used
-          custom_prompt: customPrompt,
-          message: "Video processed successfully",
-          chunks: combinedResult
-        });
-      }
+      const response = await axios.post(`${BACKEND_URL}/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setProgress(percentCompleted);
+        },
+      });
+      setResult(response.data);
     } catch (error) {
-      console.error('Error uploading file:', error);
-      setError(error.response?.data?.detail || error.message || 'An error occurred while processing the video. Please try again.');
+      setError(error.response?.data?.detail || 'An error occurred during processing');
     } finally {
       setLoading(false);
     }
@@ -184,11 +151,11 @@ function App() {
 
   const clearCache = async () => {
     try {
-      const response = await axios.post(`${BACKEND_URL}/clear_cache`);
-      alert(response.data.message);
+      await axios.post(`${BACKEND_URL}/clear_cache`);
+      alert('Cache cleared successfully');
     } catch (error) {
       console.error('Error clearing cache:', error);
-      alert('Failed to clear cache. Please try again.');
+      alert('Failed to clear cache');
     }
   };
 
