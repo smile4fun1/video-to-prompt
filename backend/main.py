@@ -95,9 +95,9 @@ def save_to_cache(cache_key, result):
 
 def extract_frames(video_path, output_folder, frame_interval=1):
     os.makedirs(output_folder, exist_ok=True)
-    ffmpeg_path = r"C:\Users\George\AppData\Local\Microsoft\WinGet\Links\ffmpeg.exe"
+    ffmpeg_command = shutil.which('ffmpeg') or 'ffmpeg'  # This will find FFmpeg in the system PATH
     command = [
-        ffmpeg_path,
+        ffmpeg_command,
         '-i', video_path,
         '-vf', f'fps=1/{frame_interval}',
         f'{output_folder}/frame_%04d.jpg'
@@ -107,7 +107,7 @@ def extract_frames(video_path, output_folder, frame_interval=1):
     except subprocess.CalledProcessError as e:
         raise Exception(f"FFmpeg error: {e.stderr}")
     except FileNotFoundError:
-        raise Exception(f"FFmpeg not found at {ffmpeg_path}. Please make sure FFmpeg is installed and the path is correct.")
+        raise Exception("FFmpeg not found. Please make sure FFmpeg is installed and available in the system PATH.")
     
     return [os.path.join(output_folder, f) for f in os.listdir(output_folder) if f.endswith('.jpg')]
 
