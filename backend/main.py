@@ -140,7 +140,7 @@ async def process_frames(frames: List[str], analysis_type: str, custom_prompt: s
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4-vision-preview",
+            model="gpt-4o",  # Changed to gpt-4o
             messages=messages,
             max_tokens=1000
         )
