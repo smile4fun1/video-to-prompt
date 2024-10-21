@@ -9,11 +9,11 @@ setup(
         "fastapi==0.68.0",
         "uvicorn==0.15.0",
         "python-multipart==0.0.5",
-        "opencv-python-headless==4.5.3.56",
         "python-dotenv==0.19.0",
         "requests==2.26.0",
         "fpdf==1.7.2",
         "markdown==3.3.4",
+        "ffmpeg-python==0.2.0",
     ],
     entry_points={
         "console_scripts": [
