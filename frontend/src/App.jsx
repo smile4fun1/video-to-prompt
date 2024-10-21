@@ -30,6 +30,9 @@ function App() {
   const [hideFooter, setHideFooter] = useState(false);
   const resultRef = useRef(null);
   const [lastScrollY, setLastScrollY] = useState(0);
+  const [showFooter, setShowFooter] = useState(true);
+  const [analysisStarted, setAnalysisStarted] = useState(false);
+  const footerRef = useRef(null);
 
   useEffect(() => {
     fetchAnalysisTypes();
@@ -54,12 +57,20 @@ function App() {
 
   useEffect(() => {
     const handleScroll = () => {
-      if (resultRef.current) {
-        const rect = resultRef.current.getBoundingClientRect();
-        if (rect.top < window.innerHeight) {
-          setHideFooter(true);
+      if (resultRef.current && footerRef.current) {
+        const resultRect = resultRef.current.getBoundingClientRect();
+        const footerRect = footerRef.current.getBoundingClientRect();
+        const windowHeight = window.innerHeight;
+        const documentHeight = document.documentElement.scrollHeight;
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+
+        // Hide footer when result is in view
+        if (resultRect.top < windowHeight && resultRect.bottom > 0) {
+          setShowFooter(false);
         } else {
-          setHideFooter(false);
+          // Show footer when scrolled to bottom
+          const isAtBottom = scrollTop + windowHeight >= documentHeight - 10;
+          setShowFooter(isAtBottom);
         }
       }
     };
@@ -84,6 +95,22 @@ function App() {
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, [lastScrollY]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (analysisStarted) {
+        const windowHeight = window.innerHeight;
+        const documentHeight = document.documentElement.scrollHeight;
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const scrollBottom = scrollTop + windowHeight;
+
+        setShowFooter(scrollBottom >= documentHeight - 150); // Increased this value
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [analysisStarted]);
 
   const fetchAnalysisTypes = async () => {
     try {
@@ -125,6 +152,8 @@ function App() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setAnalysisStarted(true);
+    setShowFooter(false);
 
     const formData = new FormData();
     formData.append('file', file);
@@ -243,7 +272,7 @@ function App() {
 
   return (
     <div className="app-wrapper">
-      <div className="app-container" ref={appRef}>
+      <div className="app-container">
         <header className="app-header">
           <div className="logo-container" onClick={handleRefresh}>
             <FontAwesomeIcon icon={faRobot} className="app-logo" />
@@ -306,24 +335,11 @@ function App() {
         {result && (
           <div className="result-container" ref={resultRef}>
             <h2>Analysis Result</h2>
-            <p><strong>Analysis Type:</strong> <span className="highlight">{result.analysis_type}</span></p>
+            <p><strong>Analysis Type:</strong> <span className="highlight">{result.analysis_type || analysisType}</span></p>
             {result.custom_prompt && <p><strong>Custom Prompt:</strong> <span className="highlight">{result.custom_prompt}</span></p>}
-            {result.chunks ? (
-              result.chunks.map((chunk, index) => (
-                <div key={index} className="chunk-result">
-                  <h3>Chunk {chunk.chunk_number} of {chunk.total_chunks}</h3>
-                  <p><strong>Frames extracted:</strong> <span className="highlight">{chunk.frames_extracted}</span></p>
-                  <h4>GPT-4 Analysis:</h4>
-                  {renderAnalysis(chunk.analysis)}
-                </div>
-              ))
-            ) : (
-              <>
-                <p><strong>Frames extracted:</strong> <span className="highlight">{result.frames_extracted}</span></p>
-                <h3>GPT-4 Analysis:</h3>
-                {renderAnalysis(result.analysis)}
-              </>
-            )}
+            <p><strong>Frames extracted:</strong> <span className="highlight">{result.frames_extracted}</span></p>
+            <h3>GPT-4 Analysis:</h3>
+            {renderAnalysis(result.analysis)}
             <div className="copy-button-container">
               <button onClick={() => copyToClipboard(result)} className="copy-button">
                 <FontAwesomeIcon icon={faCopy} /> Copy to Clipboard
@@ -332,7 +348,7 @@ function App() {
           </div>
         )}
       </div>
-      <footer className={`app-footer ${hideFooter ? 'hide' : ''}`}>
+      <footer ref={footerRef} className={`app-footer ${showFooter || !analysisStarted ? 'show' : 'hide'}`}>
         <div className="footer-content">
           <div className="social-links">
             <a href="https://twitter.com/frameinsightai" target="_blank" rel="noopener noreferrer">

@@ -19,6 +19,7 @@ from openai import OpenAI
 import time
 import io
 import textwrap
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -115,7 +116,7 @@ def encode_image(image_path):
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode('utf-8')
 
-def analyze_frames_with_gpt4(frames, analysis_type, custom_prompt=""):
+async def process_frames(frames: List[str], analysis_type: str, custom_prompt: str = ""):
     system_message = "You are an AI assistant that analyzes video frames and provides insights based on the given prompt. Provide a detailed analysis."
     
     if analysis_type in ANALYSIS_TYPES:
@@ -123,32 +124,25 @@ def analyze_frames_with_gpt4(frames, analysis_type, custom_prompt=""):
     else:
         prompt = custom_prompt if custom_prompt else "Provide a general analysis of the video content."
 
+    # Prepare base64 encoded images
+    encoded_frames = []
+    for frame in frames:
+        with open(frame, "rb") as image_file:
+            encoded_frames.append(base64.b64encode(image_file.read()).decode('utf-8'))
+
+    # Prepare the messages for GPT-4
     messages = [
         {"role": "system", "content": system_message},
-        {"role": "user", "content": [{"type": "text", "text": f"Analyze the following video frames based on this instruction: {prompt}. Provide a comprehensive analysis with as much detail as possible."}]}
+        {"role": "user", "content": [
+            {"type": "text", "text": f"Analyze the following video frames based on this instruction: {prompt}. Provide a comprehensive analysis with as much detail as possible."}
+        ] + [{"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{frame}"}} for frame in encoded_frames]}
     ]
-
-    for frame in frames[:5]:  # Limit to 5 frames for this example
-        with open(frame, "rb") as image_file:
-            base64_image = base64.b64encode(image_file.read()).decode('utf-8')
-        
-        messages.append({
-            "role": "user",
-            "content": [
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/jpeg;base64,{base64_image}"
-                    }
-                }
-            ]
-        })
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",  # Using the correct model name
+            model="gpt-4-vision-preview",
             messages=messages,
-            max_tokens=1000  # Increase the token limit for a longer response
+            max_tokens=1000
         )
         return response.choices[0].message.content
     except Exception as e:
@@ -162,7 +156,7 @@ async def process_chunk(chunk: bytes, chunk_number: int, total_chunks: int, anal
     frames_folder = tempfile.mkdtemp()
     try:
         extracted_frames = extract_frames(temp_file_path, frames_folder)
-        gpt4_analysis = analyze_frames_with_gpt4(extracted_frames, analysis_type, custom_prompt)
+        gpt4_analysis = await process_frames(extracted_frames, analysis_type, custom_prompt)
         
         result = {
             "chunk_number": chunk_number,
@@ -275,15 +269,12 @@ async def upload_video(
     if cached_result:
         return JSONResponse(cached_result)
 
-    # Process the entire video if it's small enough
-    if len(file_content) < 10 * 1024 * 1024:  # 10 MB threshold
-        result = await process_chunk(file_content, 1, 1, analysis_type, custom_prompt)
-        if "error" in result:
-            raise HTTPException(status_code=500, detail=result["error"])
-        save_to_cache(cache_key, result)
-        return JSONResponse(result)
-    else:
-        raise HTTPException(status_code=413, detail="File too large. Please use chunked upload.")
+    # Process the entire video
+    result = await process_chunk(file_content, 1, 1, analysis_type, custom_prompt)
+    if "error" in result:
+        raise HTTPException(status_code=500, detail=result["error"])
+    save_to_cache(cache_key, result)
+    return JSONResponse(result)
 
 @app.get("/analysis_types")
 async def get_analysis_types():
