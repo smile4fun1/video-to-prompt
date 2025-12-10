@@ -1,6 +1,6 @@
 import os
 import subprocess
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 import tempfile
@@ -11,7 +11,7 @@ import hashlib
 import json
 from pathlib import Path
 import asyncio
-from typing import List
+from typing import List, Optional
 from fpdf import FPDF
 import markdown
 import shutil
@@ -20,6 +20,11 @@ import time
 import io
 import textwrap
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from PIL import Image
+import numpy as np
+from pydantic import BaseModel
+import yt_dlp
+import cv2
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -28,7 +33,7 @@ app = FastAPI()
 # Update the CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://frame-insight-ai.vercel.app", "http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["https://frame-insight-ai.vercel.app", "http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -41,21 +46,26 @@ CACHE_DIR.mkdir(exist_ok=True)
 # Initialize the OpenAI client
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# Updated and enhanced Analysis Types
+# Analysis Types - All emphasize cohesive, unified analysis
 ANALYSIS_TYPES = {
-    "general": "Provide a detailed general analysis of the video content, including key elements, actions, and overall context.",
-    "ui_interaction": "Analyze the user interface interactions in detail, focusing on button clicks, menu navigation, cursor movements, and any changes in the UI state.",
-    "emotion_recognition": "Detect and analyze emotions of people in the video, including facial expressions, body language, and any changes in emotional state over time.",
-    "object_detection": "Identify and describe key objects in the video, their positions, movements, and any interactions between objects.",
-    "text_recognition": "Recognize and transcribe any text visible in the video, including on-screen displays, subtitles, or text within the scene.",
-    "action_recognition": "Identify and describe specific actions or activities occurring in the video, including human actions, object movements, or scene changes.",
-    "scene_understanding": "Analyze the overall scene composition, including setting, lighting, camera angles, and how these elements contribute to the video's message or mood.",
-    "color_analysis": "Examine the color palette used in the video, including dominant colors, color transitions, and how colors are used to convey mood or emphasis.",
-    "audio_visual_sync": "Analyze the synchronization between visual elements and any audio cues (if present), including lip-sync, sound effects matching visuals, or music beats aligning with scene changes.",
-    "temporal_analysis": "Examine how the video content changes over time, including scene transitions, narrative progression, or changes in visual elements.",
-    "accessibility_assessment": "Evaluate the video for accessibility features, such as closed captions, visual clarity, color contrast, and ease of understanding without audio.",
-    "brand_presence": "Identify and analyze any brand elements present in the video, including logos, product placements, or brand-specific color schemes and designs.",
-    "custom": "Analyze the video based on a custom prompt provided by the user."
+    "auto": "Determine the most suitable analysis approach based on the video content. Start by stating 'Analysis Style: [Style Name]'. Then deliver a confident, flowing analysis focused on specific behaviors, movement quality, efficiency patterns, and critical insights. Write naturally - avoid bullet points unless necessary. Be direct about issues: if movement is aggressive, say 'aggressive approach'. If there are inefficiencies, specify them. Provide actionable technical observations.",
+    "general": "Provide INTELLIGENT overview with behavioral insights. Don't just describe what you see - analyze HOW things happen. Is movement smooth or jerky? Fast or slow? Efficient or wasteful? Aggressive or gentle? Notice patterns, quality, and specific behaviors. Be detailed and observant.",
+    "technical_analysis": "Provide SHARP technical analysis from an engineering perspective. Focus on: (1) Movement quality - is it smooth, jerky, aggressive, or hesitant? (2) Speed patterns - consistent or erratic? (3) Trajectory precision - accurate or sloppy? (4) Operational anomalies - any aggressive approaches, near-misses, or safety issues? (5) Efficiency - wasted motion, optimal paths, timing issues? Extract specific KPIs and behavioral patterns. Call out problems explicitly.",
+    "ui_interaction": "Describe the complete user interface interaction flow shown in this video. Summarize the navigation path, key actions taken, UI changes observed, and overall workflow in a cohesive narrative.",
+    "emotion_recognition": "Analyze the emotional journey throughout the video. Describe the overall emotional tone, significant shifts, dominant expressions, and how emotions evolve across the entire sequence. Write as a unified emotional analysis.",
+    "object_detection": "Identify the key objects present in the video and describe their roles, movements, and interactions throughout. Present as a cohesive description of the object dynamics in the scene.",
+    "text_recognition": "Extract and transcribe all visible text from the video. Organize by context and relevance, noting what information is displayed and when it appears. Present as a structured text report.",
+    "action_recognition": "Analyze the ACTION QUALITY and BEHAVIOR. Don't just list what happens - describe HOW it happens. Is execution smooth or jerky? Quick or slow? Precise or sloppy? Aggressive or controlled? Identify the ACTION STYLE and EFFICIENCY. Call out specific behavioral patterns.",
+    "scene_understanding": "Provide a comprehensive scene analysis covering setting, composition, lighting, camera work, and visual storytelling. Discuss how these elements work together to convey the video's message.",
+    "color_analysis": "Analyze the video's color palette and visual style. Discuss dominant colors, mood conveyed through color choices, transitions, and how color contributes to the overall aesthetic.",
+    "audio_visual_sync": "Analyze how visual and audio elements work together throughout the video (if audio context is visible through visual cues like speakers, instruments, or text).",
+    "temporal_analysis": "Describe how the video content evolves over time. Analyze pacing, transitions, narrative progression, and how the story or message unfolds from beginning to end.",
+    "accessibility_assessment": "Evaluate the video's accessibility as a complete piece. Assess visual clarity, text readability, color contrast, and ease of understanding. Provide a unified accessibility report.",
+    "brand_presence": "Identify and analyze brand elements throughout the video. Describe branding strategy, placement, consistency, and overall brand message conveyed.",
+    "robot_performance": "Deliver CRITICAL performance analysis. Focus on: (1) Speed consistency - smooth or variable? (2) Approach behavior - aggressive, cautious, or optimal? (3) Path efficiency - direct or wasteful? (4) Timing patterns - rushed, delayed, or well-paced? (5) Precision level - accurate positioning or sloppy execution? Identify specific performance issues with behavioral descriptions. If movement is aggressive, say 'aggressive approach'. Be specific about what's working and what's not.",
+    "anomaly_detection": "SHARP anomaly detection required. Identify: (1) Aggressive or erratic movements (2) Near-misses or collision risks (3) Speed inconsistencies or sudden changes (4) Unexpected hesitations or stops (5) Path deviations or inefficient routing (6) Any behavior that seems unsafe or suboptimal. Don't just list observations - analyze WHY they're problematic and WHAT the impact is. Be direct about issues.",
+    "hmi_ui_analysis": "EXTRACT SPECIFIC DATA from HMI/UI screens. Read and transcribe: (1) Numerical values and their labels (2) Status indicators and alarms (3) Button/control interactions (4) Error messages or warnings (5) Timing or sequence information. Don't just describe the interface - EXTRACT THE DATA. If you see '23.5 RPM' or 'Error Code 404', include those exact values. Be a data extractor, not just a describer.",
+    "custom": "Follow the user's instructions with EXPERT-LEVEL DETAIL. Apply sharp behavioral analysis: identify specific movements, speeds, behaviors (aggressive, smooth, erratic, etc.), efficiency patterns, and quality issues. Don't be generic - be specific, observant, and insightful. Notice what others would miss."
 }
 
 class RateLimiter:
@@ -94,59 +104,423 @@ def save_to_cache(cache_key, result):
     with cache_file.open("w") as f:
         json.dump(result, f)
 
-def extract_frames(video_path, output_folder, frame_interval=1):
-    os.makedirs(output_folder, exist_ok=True)
-    ffmpeg_command = shutil.which('ffmpeg') or 'ffmpeg'  # This will find FFmpeg in the system PATH
-    command = [
-        ffmpeg_command,
-        '-i', video_path,
-        '-vf', f'fps=1/{frame_interval}',
-        f'{output_folder}/frame_%04d.jpg'
-    ]
-    try:
-        subprocess.run(command, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        raise Exception(f"FFmpeg error: {e.stderr}")
-    except FileNotFoundError:
-        raise Exception("FFmpeg not found. Please make sure FFmpeg is installed and available in the system PATH.")
+def download_video(url, output_path):
+    """Download and transcode video from URL to ensure compatibility."""
+    # Download to a temporary location first
+    temp_download = output_path + ".temp"
     
-    return [os.path.join(output_folder, f) for f in os.listdir(output_folder) if f.endswith('.jpg')]
+    # Try multiple client strategies for YouTube
+    ydl_opts = {
+        'format': '(bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a])/best[ext=mp4][height<=720]/best[height<=720]/best',
+        'outtmpl': temp_download,
+        'quiet': False,
+        'no_warnings': True,
+        'merge_output_format': 'mp4',
+        # Force specific client for YouTube to bypass restrictions
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['ios', 'web', 'android'],
+                'player_skip': ['webpage', 'configs'],
+            }
+        },
+        # YouTube bot detection bypass - comprehensive headers
+        'http_headers': {
+            'User-Agent': 'com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)',
+            'Accept': '*/*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate',
+            'X-YouTube-Client-Name': '5',
+            'X-YouTube-Client-Version': '19.29.1',
+        },
+        'nocheckcertificate': True,
+        'no_check_certificates': True,
+        'prefer_insecure': False,
+        'geo_bypass': True,
+        'geo_bypass_country': 'US',
+        'age_limit': None,
+        'extractor_retries': 3,
+        'fragment_retries': 3,
+        'skip_unavailable_fragments': True,
+        'ignoreerrors': False,
+        'socket_timeout': 30,
+        'retries': 5,
+    }
+    
+    try:
+        # Strategy 1: Try with iOS client (most reliable for YouTube)
+        success = False
+        last_error = None
+        
+        try:
+            print("Attempting download with iOS client...")
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+            success = True
+        except Exception as e:
+            last_error = e
+            print(f"iOS client failed: {e}")
+        
+        # Strategy 2: Try with Android client
+        if not success:
+            try:
+                print("Retrying with Android client...")
+                ydl_opts['extractor_args']['youtube']['player_client'] = ['android']
+                ydl_opts['http_headers']['User-Agent'] = 'com.google.android.youtube/19.29.37 (Linux; U; Android 13)'
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
+                success = True
+            except Exception as e:
+                last_error = e
+                print(f"Android client failed: {e}")
+        
+        # Strategy 3: Try web client with different user agent
+        if not success:
+            try:
+                print("Retrying with web client...")
+                ydl_opts['extractor_args']['youtube']['player_client'] = ['web']
+                ydl_opts['http_headers']['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                ydl_opts['format'] = 'best[height<=480]/worst'  # Try even lower quality
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
+                success = True
+            except Exception as e:
+                last_error = e
+                print(f"Web client failed: {e}")
+        
+        # Strategy 4: Last resort - try with minimal options
+        if not success:
+            try:
+                print("Final attempt with minimal config...")
+                minimal_opts = {
+                    'format': 'worst',
+                    'outtmpl': temp_download,
+                    'quiet': True,
+                }
+                with yt_dlp.YoutubeDL(minimal_opts) as ydl:
+                    ydl.download([url])
+                success = True
+            except Exception as e:
+                last_error = e
+                print(f"Minimal config failed: {e}")
+        
+        if not success:
+            error_msg = str(last_error)
+            if '403' in error_msg or 'Forbidden' in error_msg:
+                raise Exception(
+                    "Unable to download video (Access Denied). Please use the 'Upload File' option instead. "
+                    "Download the video manually first, then upload it here for analysis."
+                )
+            elif 'player response' in error_msg.lower():
+                raise Exception(
+                    "YouTube download temporarily unavailable. Please: 1) Try a different video, or "
+                    "2) Download the video manually and use 'Upload File' instead."
+                )
+            else:
+                raise Exception(f"Download failed: {error_msg}")
+        
+        # Check if file exists (yt-dlp might add .mp4 extension)
+        actual_file = temp_download
+        possible_files = [
+            temp_download,
+            temp_download + ".mp4",
+            temp_download + ".webm",
+            temp_download + ".mkv"
+        ]
+        
+        for pf in possible_files:
+            if os.path.exists(pf):
+                actual_file = pf
+                break
+        
+        if not os.path.exists(actual_file):
+            raise Exception("Download completed but output file not found")
+        
+        print(f"Downloaded to: {actual_file}")
+        
+        # Transcode to ensure compatibility with ffmpeg
+        ffmpeg_command = shutil.which('ffmpeg') or 'ffmpeg'
+        transcode_cmd = [
+            ffmpeg_command,
+            '-i', actual_file,
+            '-c:v', 'libx264',  # Re-encode video
+            '-preset', 'ultrafast',  # Fast encoding
+            '-c:a', 'aac',  # Re-encode audio
+            '-strict', 'experimental',
+            '-y',  # Overwrite output
+            output_path
+        ]
+        
+        print("Transcoding video...")
+        result = subprocess.run(transcode_cmd, capture_output=True, text=True)
+        
+        # Clean up temp file
+        if os.path.exists(actual_file):
+            os.remove(actual_file)
+        
+        if result.returncode != 0:
+            raise Exception(f"Transcoding failed: {result.stderr}")
+        
+        print("Video ready for processing")
+            
+    except Exception as e:
+        # Clean up on failure
+        cleanup_files = [temp_download, temp_download + ".mp4", temp_download + ".webm", temp_download + ".mkv"]
+        if 'actual_file' in locals():
+            cleanup_files.append(actual_file)
+        
+        for f in cleanup_files:
+            if f and os.path.exists(f):
+                try:
+                    os.remove(f)
+                except:
+                    pass
+        
+        # Re-raise with preserved message
+        raise e
+
+def detect_scene_changes(video_path, threshold=30.0):
+    """Detect scene changes in a video using frame difference."""
+    cap = cv2.VideoCapture(video_path)
+    scene_frames = [0]  # Always include first frame
+    prev_frame = None
+    frame_count = 0
+    
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        
+        if prev_frame is not None:
+            # Calculate frame difference
+            diff = cv2.absdiff(prev_frame, gray)
+            mean_diff = np.mean(diff)
+            
+            # If significant change detected, mark as scene change
+            if mean_diff > threshold:
+                scene_frames.append(frame_count)
+        
+        prev_frame = gray
+        frame_count += 1
+    
+    cap.release()
+    return scene_frames
+
+def extract_frames_smart(video_path, output_folder, max_frames=30):
+    """Smart frame extraction using scene change detection + time-based sampling."""
+    os.makedirs(output_folder, exist_ok=True)
+    
+    # Validate video file exists
+    if not os.path.exists(video_path):
+        raise Exception(f"Video file not found: {video_path}")
+    
+    # Get video info
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise Exception("Failed to open video file. The file may be corrupted or in an unsupported format.")
+    
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    duration = total_frames / fps if fps > 0 else 0
+    cap.release()
+    
+    if duration == 0 or fps == 0:
+        raise Exception("Unable to read video properties. The video file may be invalid.")
+    
+    # Strategy 1: For short videos (< 20 sec), extract every 1 second
+    if duration < 20:
+        ffmpeg_command = shutil.which('ffmpeg') or 'ffmpeg'
+        command = [
+            ffmpeg_command,
+            '-i', video_path,
+            '-vf', f'fps=1',  # 1 frame per second
+            '-q:v', '2',  # High quality
+            f'{output_folder}/frame_%04d.jpg'
+        ]
+        result = subprocess.run(command, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise Exception(f"Frame extraction failed: {result.stderr}")
+    
+    # Strategy 2: For medium videos (20-90 sec), extract every 2-3 seconds
+    elif duration < 90:
+        ffmpeg_command = shutil.which('ffmpeg') or 'ffmpeg'
+        # Calculate interval to get ~25-30 frames
+        interval = max(2, int(duration / 28))
+        command = [
+            ffmpeg_command,
+            '-i', video_path,
+            '-vf', f'fps=1/{interval}',  # 1 frame every N seconds
+            '-q:v', '2',  # High quality
+            f'{output_folder}/frame_%04d.jpg'
+        ]
+        result = subprocess.run(command, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise Exception(f"Frame extraction failed: {result.stderr}")
+    
+    # Strategy 3: For longer videos, use scene detection + time-based
+    else:
+        try:
+            scene_frames = detect_scene_changes(video_path, threshold=25.0)  # Lower threshold for more scenes
+            # Extract scene change frames
+            cap = cv2.VideoCapture(video_path)
+            for idx, frame_num in enumerate(scene_frames[:max_frames]):
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
+                ret, frame = cap.read()
+                if ret:
+                    cv2.imwrite(f'{output_folder}/frame_{idx:04d}.jpg', frame)
+            cap.release()
+            
+            # If scene detection gave us fewer than 20 frames, supplement with time-based
+            extracted_files = [f for f in os.listdir(output_folder) if f.endswith('.jpg')]
+            if len(extracted_files) < 20:
+                # Fall back to time-based extraction targeting 25-30 frames
+                interval = max(2, int(duration / 28))  # Target ~28 frames
+                ffmpeg_command = shutil.which('ffmpeg') or 'ffmpeg'
+                command = [
+                    ffmpeg_command,
+                    '-i', video_path,
+                    '-vf', f'fps=1/{interval}',
+                    '-q:v', '2',
+                    f'{output_folder}/frame_%04d.jpg'
+                ]
+                result = subprocess.run(command, capture_output=True, text=True)
+                if result.returncode != 0:
+                    raise Exception(f"Frame extraction failed: {result.stderr}")
+        except Exception as e:
+            # Fallback to simple time-based if scene detection fails
+            print(f"Scene detection failed: {e}, falling back to time-based")
+            interval = max(2, int(duration / 28))  # Target ~28 frames
+            ffmpeg_command = shutil.which('ffmpeg') or 'ffmpeg'
+            command = [
+                ffmpeg_command,
+                '-i', video_path,
+                '-vf', f'fps=1/{interval}',
+                '-q:v', '2',
+                f'{output_folder}/frame_%04d.jpg'
+            ]
+            result = subprocess.run(command, capture_output=True, text=True)
+            if result.returncode != 0:
+                raise Exception(f"Frame extraction failed: {result.stderr}")
+    
+    frames = [os.path.join(output_folder, f) for f in os.listdir(output_folder) if f.endswith('.jpg')]
+    frames.sort()
+    
+    if len(frames) == 0:
+        raise Exception("No frames were extracted from the video. The video may be too short or corrupted.")
+    
+    # Cap at max_frames
+    if len(frames) > max_frames:
+        step = len(frames) // max_frames
+        frames = frames[::step][:max_frames]
+    
+    return frames
 
 def encode_image(image_path):
-    with open(image_path, "rb") as image_file:
-        return base64.b64encode(image_file.read()).decode('utf-8')
+    # Resize image to reduce token usage
+    with Image.open(image_path) as img:
+        # Resize to max dimension 768px for better quality while balancing tokens
+        img.thumbnail((768, 768))
+        
+        # Convert to RGB if necessary
+        if img.mode in ('RGBA', 'P'):
+            img = img.convert('RGB')
+            
+        # Save to bytes
+        buffer = io.BytesIO()
+        img.save(buffer, format="JPEG", quality=90)
+        return base64.b64encode(buffer.getvalue()).decode('utf-8')
 
 async def process_frames(frames: List[str], analysis_type: str, custom_prompt: str = ""):
-    system_message = "You are an AI assistant that analyzes video frames and provides insights based on the given prompt. Provide a detailed analysis."
+    system_message = """You are an ELITE video analyst with razor-sharp perception and technical expertise.
+
+CRITICAL IDENTITY:
+- You CAN analyze videos - you are viewing key frames that represent the complete video
+- You HAVE the visual information needed to provide expert analysis
+- You are CONFIDENT in your observations and insights
+- You NEVER say "I cannot analyze" or "I'm unable to" - you ALWAYS provide analysis
+
+YOUR ANALYSIS STYLE:
+- DIRECT and CONFIDENT - no hedging or uncertainty
+- BEHAVIORAL FOCUS - describe HOW things move, not just WHAT moves
+- CRITICAL EYE - spot inefficiencies, issues, aggressive patterns
+- SPECIFIC OBSERVATIONS - "the robot accelerates rapidly at 0:15" not "movement occurs"
+- NATURAL FLOW - write like a technical report, not a bullet list
+- ACTIONABLE - every observation leads to insight
+
+FORBIDDEN BEHAVIORS:
+❌ NEVER say "I cannot analyze a video" or "based on images"
+❌ NEVER write generic descriptions lacking specificity
+❌ NEVER structure as numbered lists unless truly necessary
+❌ NEVER describe frames individually
+❌ NEVER miss obvious behavioral patterns
+
+REQUIRED BEHAVIORS:
+✅ Write with authority and confidence
+✅ Use specific behavioral descriptors: "aggressive approach", "hesitant deceleration", "smooth trajectory"
+✅ Identify efficiency issues: "wasted motion", "suboptimal path", "excessive speed variation"
+✅ Provide technical observations: approximate speeds, timing patterns, spacing
+✅ Flow naturally like an expert's verbal analysis
+
+You have EXPERT-LEVEL PERCEPTION. You notice what others miss: micro-behaviors, efficiency gaps, safety risks, and optimization opportunities.
+
+EXAMPLE OF GOOD ANALYSIS:
+"The delivery robots demonstrate generally smooth navigation through the dining area, maintaining consistent spacing of approximately 1.2 meters between units. However, the lead robot exhibits an aggressive approach pattern when nearing the delivery point, with noticeable acceleration rather than the expected gradual deceleration. This creates a potential safety concern and suggests the velocity profiling algorithm needs adjustment. The trailing robots show better speed modulation, decelerating smoothly as they approach their targets. Path efficiency is good with minimal wasted lateral movement, though there's a brief hesitation at 0:23 suggesting obstacle detection may be overly sensitive. Overall operational quality is solid but the aggressive approach behavior requires immediate attention to prevent potential collisions in busier environments."
+
+EXAMPLE OF BAD ANALYSIS:
+"I'm unable to analyze a video, but based on the images: 1. Movement - robots move. 2. Speed - appears consistent. 3. Safety - no issues visible."
+"""
     
     if analysis_type in ANALYSIS_TYPES:
         prompt = ANALYSIS_TYPES[analysis_type]
     else:
-        prompt = custom_prompt if custom_prompt else "Provide a general analysis of the video content."
+        prompt = custom_prompt if custom_prompt else "Provide a sharp, detailed analysis with specific behavioral observations."
 
     # Prepare base64 encoded images
     encoded_frames = []
     for frame in frames:
-        with open(frame, "rb") as image_file:
-            encoded_frames.append(base64.b64encode(image_file.read()).decode('utf-8'))
+        encoded_frames.append(encode_image(frame))
 
-    # Prepare the messages for GPT-4
+    # Enhanced user instruction with specific detail requirements
+    user_instruction = f"""You are viewing key frames from a video. Provide expert analysis with complete confidence.
+
+YOUR TASK: {prompt}
+
+ANALYSIS APPROACH:
+Write a flowing, natural analysis like a technical expert verbally explaining what they observe. Focus on:
+
+- MOVEMENT BEHAVIOR: Describe the quality and character of motion (smooth/jerky, fast/slow, aggressive/cautious, efficient/wasteful)
+- SPECIFIC OBSERVATIONS: Use precise descriptors and approximate metrics when visible
+- CRITICAL INSIGHTS: Identify issues, inefficiencies, or risks - don't just describe what's happening
+- ACTIONABLE FINDINGS: What's working? What needs adjustment?
+
+WRITE NATURALLY: Avoid numbered lists unless truly necessary. Write like you're delivering a verbal technical briefing.
+
+BE DIRECT: "The robot approaches aggressively" not "The robot seems to approach"
+BE SPECIFIC: "Speed varies between 0.8-1.5 m/s" not "Movement occurs at different speeds"  
+BE CRITICAL: Point out inefficiencies, safety concerns, or suboptimal behaviors
+BE CONFIDENT: You have the visual information. Provide definitive analysis."""
+
     messages = [
         {"role": "system", "content": system_message},
         {"role": "user", "content": [
-            {"type": "text", "text": f"Analyze the following video frames based on this instruction: {prompt}. Provide a comprehensive analysis with as much detail as possible."}
-        ] + [{"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{frame}"}} for frame in encoded_frames]}
+            {"type": "text", "text": user_instruction}
+        ] + [{"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{frame}", "detail": "high"}} for frame in encoded_frames]}
     ]
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",  # Changed to gpt-4o
+            model="gpt-4o",  # Use gpt-4o for best vision performance
             messages=messages,
-            max_tokens=1000
+            max_tokens=4000,  # Increased for detailed behavioral analysis
+            temperature=0.7,  # Slight creativity for better descriptive language
         )
         return response.choices[0].message.content
     except Exception as e:
-        return {"error": str(e)}
+        error_msg = str(e)
+        if "rate_limit_exceeded" in error_msg:
+             return {"error": "Rate limit exceeded. Try again in a moment."}
+        return {"error": error_msg}
 
 async def process_chunk(chunk: bytes, chunk_number: int, total_chunks: int, analysis_type: str, custom_prompt: str = ""):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_file:
@@ -155,14 +529,15 @@ async def process_chunk(chunk: bytes, chunk_number: int, total_chunks: int, anal
 
     frames_folder = tempfile.mkdtemp()
     try:
-        extracted_frames = extract_frames(temp_file_path, frames_folder)
+        extracted_frames = extract_frames_smart(temp_file_path, frames_folder)
         gpt4_analysis = await process_frames(extracted_frames, analysis_type, custom_prompt)
         
         result = {
             "chunk_number": chunk_number,
             "total_chunks": total_chunks,
             "frames_extracted": len(extracted_frames),
-            "analysis": gpt4_analysis
+            "analysis": gpt4_analysis,
+            "analysis_type": analysis_type
         }
     except Exception as e:
         result = {
@@ -173,6 +548,25 @@ async def process_chunk(chunk: bytes, chunk_number: int, total_chunks: int, anal
         os.unlink(temp_file_path)
         shutil.rmtree(frames_folder)
     
+    return result
+
+async def process_video_file(file_path: str, analysis_type: str, custom_prompt: str = ""):
+    frames_folder = tempfile.mkdtemp()
+    try:
+        extracted_frames = extract_frames_smart(file_path, frames_folder)
+        gpt4_analysis = await process_frames(extracted_frames, analysis_type, custom_prompt)
+        
+        result = {
+            "frames_extracted": len(extracted_frames),
+            "analysis": gpt4_analysis,
+            "analysis_type": analysis_type
+        }
+    except Exception as e:
+        result = {
+            "error": str(e)
+        }
+    finally:
+        shutil.rmtree(frames_folder)
     return result
 
 def generate_pdf(result):
@@ -255,26 +649,125 @@ async def upload_chunk(
 
 @app.post("/upload")
 async def upload_video(
-    file: UploadFile = File(...),
+    file: Optional[UploadFile] = File(None),
+    url: Optional[str] = Form(None),
     analysis_type: str = Form(...),
     custom_prompt: str = Form("")
 ):
     if not rate_limiter.consume(1):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Please try again later.")
 
-    file_content = await file.read()
-    cache_key = get_cache_key(file_content, f"{analysis_type}_{custom_prompt}")
-    
-    cached_result = get_cached_result(cache_key)
-    if cached_result:
-        return JSONResponse(cached_result)
+    if not file and not url:
+        raise HTTPException(status_code=400, detail="Either file or URL must be provided.")
 
-    # Process the entire video
-    result = await process_chunk(file_content, 1, 1, analysis_type, custom_prompt)
-    if "error" in result:
-        raise HTTPException(status_code=500, detail=result["error"])
-    save_to_cache(cache_key, result)
-    return JSONResponse(result)
+    if url:
+        # Handle URL download
+        cache_key = get_cache_key(url.encode(), f"{analysis_type}_{custom_prompt}")
+        cached_result = get_cached_result(cache_key)
+        if cached_result:
+            return JSONResponse(cached_result)
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_file:
+            temp_file_path = temp_file.name
+        
+        try:
+            print(f"Downloading video from URL: {url}")
+            download_video(url, temp_file_path)
+            
+            # Verify file was created and has content
+            if not os.path.exists(temp_file_path):
+                raise Exception("Video download failed - file not created")
+            
+            file_size = os.path.getsize(temp_file_path)
+            if file_size == 0:
+                raise Exception("Video download failed - empty file")
+            
+            print(f"Video downloaded successfully ({file_size} bytes), processing...")
+            result = await process_video_file(temp_file_path, analysis_type, custom_prompt)
+            result["filename"] = url
+            
+            if "error" in result:
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+                return JSONResponse(content={"error": result["error"]}, status_code=500)
+            
+            save_to_cache(cache_key, result)
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+            return JSONResponse(result)
+        except Exception as e:
+            if os.path.exists(temp_file_path):
+                try:
+                    os.unlink(temp_file_path)
+                except:
+                    pass
+            error_message = str(e)
+            print(f"Error processing URL: {error_message}")
+            return JSONResponse(content={"error": f"Failed to process video from URL. {error_message}"}, status_code=500)
+
+    else:
+        # Handle File Upload
+        file_content = await file.read()
+        cache_key = get_cache_key(file_content, f"{analysis_type}_{custom_prompt}")
+        
+        cached_result = get_cached_result(cache_key)
+        if cached_result:
+            return JSONResponse(cached_result)
+
+        # Process the entire video
+        result = await process_chunk(file_content, 1, 1, analysis_type, custom_prompt)
+        result["filename"] = file.filename
+        
+        if "error" in result:
+            return JSONResponse(content={"error": result["error"]}, status_code=500)
+            
+        save_to_cache(cache_key, result)
+        return JSONResponse(result)
+
+class RefineRequest(BaseModel):
+    original_analysis: str
+    refinement_prompt: str
+    analysis_type: str
+
+@app.post("/refine")
+async def refine_analysis(request: RefineRequest):
+    if not rate_limiter.consume(1):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded.")
+
+    # Build dynamic system message based on analysis type
+    analysis_context = ""
+    if request.analysis_type in ANALYSIS_TYPES:
+        analysis_context = f"\n\nOriginal Analysis Context: The video was analyzed using the '{request.analysis_type}' model with this focus: {ANALYSIS_TYPES[request.analysis_type]}"
+    
+    system_message = f"""You are an expert technical editor and analyst. You will be provided with:
+1. A previous analysis of a video
+2. The original analysis type/context that was used
+3. A user's refinement request
+
+Your goal is to rewrite or enhance the analysis to satisfy the user's request while maintaining strict adherence to the visual information from the original analysis.
+
+CRITICAL RULES:
+- Only use information present in the original analysis or what can be logically inferred from it
+- Do NOT hallucinate new visual details not mentioned
+- If the user asks for something impossible to know from the analysis, explain the limitation politely
+- Maintain technical accuracy and clarity
+- Format your response for maximum readability{analysis_context}"""
+    
+    messages = [
+        {"role": "system", "content": system_message},
+        {"role": "user", "content": f"Original Analysis:\n{request.original_analysis}\n\nUser Refinement Request:\n{request.refinement_prompt}\n\nPlease provide the refined analysis:"}
+    ]
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",  # Use gpt-4o for best refinement quality
+            messages=messages,
+            max_tokens=2000
+        )
+        refined_text = response.choices[0].message.content
+        return JSONResponse({"analysis": refined_text})
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 @app.get("/analysis_types")
 async def get_analysis_types():
@@ -305,7 +798,6 @@ async def download_result(format: str, cache_key: str):
     else:
         raise HTTPException(status_code=400, detail="Invalid format")
 
-# Add a new endpoint to clear the cache
 @app.post("/clear_cache")
 async def clear_cache():
     try:

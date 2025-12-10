@@ -1,159 +1,307 @@
-# Video Analysis App
+# Frame Insight - Video Intelligence, Amplified
 
-This project consists of a FastAPI backend and a React + Vite frontend for analyzing videos using FFmpeg and GPT-4.
+A powerful AI-powered video analysis application that extracts KPIs, technical data, sentiment, brand insights, and more from any video. Built with FastAPI, React, and GPT-4o vision capabilities.
 
-## Project Structure
+## 🌟 Features
+
+### Core Capabilities
+- **Smart Frame Extraction**: Intelligent scene change detection + time-based sampling for optimal frame selection
+- **AI-Powered Analysis**: GPT-4o vision model for expert-level video understanding
+- **Multiple Analysis Types**: 18+ specialized analysis modes including:
+  - AUTO (Recommended) - Automatically determines best analysis approach
+  - Technical Analysis - For robotics, engineering, and performance data
+  - Robot Performance - Cycle times, efficiency, anomaly detection
+  - HMI/UI Analysis - Extract data from screens and interfaces
+  - Emotion Recognition, Brand Presence, Action Recognition, and more
+- **AI Refinement**: Iteratively refine results with additional prompts
+- **History Tracking**: Automatically saves all analyses with browser persistence
+- **Drag & Drop**: Modern file upload with drag-and-drop support
+- **URL Support**: Analyze videos from YouTube, Vimeo, TikTok, and more (via yt-dlp)
+
+### User Experience
+- Clean, Apple-inspired UI with glassmorphism effects
+- Real-time progress indicators with AI-themed loading messages
+- Persistent state across page refreshes
+- Responsive design for mobile and desktop
+- History panel for accessing past analyses
+- Copy and export functionality
+
+## 🏗️ Architecture
 
 ```
-video-analysis-app/
+video-to-prompt/
 ├── backend/
-│   ├── venv/
-│   ├── main.py
-│   ├── requirements.txt
-│   ├── setup.py
-│   └── cache/
+│   ├── main.py              # FastAPI server with all endpoints
+│   ├── requirements.txt     # Python dependencies
+│   ├── .env                 # OpenAI API key (create this)
+│   └── cache/              # Analysis cache (auto-created)
 └── frontend/
-    ├── public/
     ├── src/
-    │   ├── App.jsx
-    │   ├── App.css
-    │   └── main.jsx
-    ├── package.json
-    └── vite.config.js
+    │   ├── App.jsx         # Main React component
+    │   ├── App.css         # Styling
+    │   └── main.jsx        # React 18 entry point
+    ├── public/
+    │   └── favicon.svg     # Frame Insight logo
+    └── package.json        # Node dependencies
 ```
 
-## Prerequisites
+## 📋 Prerequisites
 
-- Python 3.7+
-- Node.js 14+
-- npm 6+
-- OpenAI API key
-- FFmpeg (installed and available in system PATH)
+- **Python 3.9+** (3.10+ recommended)
+- **Node.js 16+** and npm
+- **FFmpeg** (for video processing)
+- **OpenAI API Key** with GPT-4o access
 
-## Installation and Setup
+## 🚀 Installation
 
-### FFmpeg Installation
+### 1. Clone Repository
+```bash
+git clone <repository-url>
+cd video-to-prompt
+```
 
-1. Download FFmpeg from the official website: https://ffmpeg.org/download.html
-2. Extract the downloaded archive
-3. Add the path to the FFmpeg `bin` folder to your system's PATH environment variable
+### 2. Install FFmpeg
+**macOS:**
+```bash
+brew install ffmpeg
+```
 
-### Backend
+**Ubuntu/Debian:**
+```bash
+sudo apt update
+sudo apt install ffmpeg
+```
 
-1. Navigate to the backend directory:
-   ```
-   cd backend
-   ```
+**Windows:**
+Download from [ffmpeg.org](https://ffmpeg.org/download.html) and add to PATH
 
-2. Create and activate a virtual environment:
-   ```
-   python -m venv venv
-   source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
-   ```
+### 3. Backend Setup
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
 
-3. Install the backend package:
-   ```
-   pip install -e .
-   ```
+Create `.env` file:
+```env
+OPENAI_API_KEY=sk-your-key-here
+```
 
-4. Create a `.env` file in the backend directory and add your OpenAI API key:
-   ```
-   OPENAI_API_KEY=your_api_key_here
-   ```
+### 4. Frontend Setup
+```bash
+cd frontend
+npm install
+```
 
-5. Create a `cache` directory in the backend folder:
-   ```
-   mkdir cache
-   ```
+## ▶️ Running the Application
 
-### Frontend
+### Start Backend (Terminal 1)
+```bash
+cd backend
+source venv/bin/activate
+uvicorn main:app --reload --port 8000
+```
 
-1. Navigate to the frontend directory:
-   ```
-   cd frontend
-   ```
+Backend runs at: `http://127.0.0.1:8000`
 
-2. Install the required packages:
-   ```
-   npm install
-   ```
+### Start Frontend (Terminal 2)
+```bash
+cd frontend
+npm run dev
+```
 
-## Running the Application
+Frontend runs at: `http://localhost:3000`
 
-### Backend
+## 📖 Usage Guide
 
-1. From the backend directory, activate the virtual environment if not already activated:
-   ```
-   source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
-   ```
+### Basic Analysis
+1. **Upload Video**: Drag & drop or click to browse (supports MP4, MOV, AVI, WebM)
+2. **Select Analysis Type**: Choose from dropdown or use AUTO for intelligent selection
+3. **Analyze**: Click "Analyze Video" and wait for AI processing
+4. **View Results**: See comprehensive analysis with frame count and insights
 
-2. Run the FastAPI server:
-   ```
-   uvicorn main:app --reload
-   ```
+### URL Analysis
+1. Switch to "Video URL" tab
+2. Paste YouTube/Vimeo/TikTok link
+3. Analyze (note: some platforms may block downloads - use file upload as fallback)
 
-The backend will be available at `http://localhost:8000`.
+### AI Refinement
+1. After getting results, use the "AI Refinement" text box
+2. Ask AI to format, summarize, or extract specific details
+3. New refined results appear below original analysis
+4. Chain multiple refinements for iterative improvement
 
-### Frontend
+### History
+1. Click "History" button in navbar
+2. View all past analyses with timestamps
+3. Click "View" to restore any previous analysis
+4. Delete individual items or clear all history
 
-1. From the frontend directory, run the development server:
-   ```
-   npm run dev
-   ```
+## 🎯 Analysis Types
 
-The frontend will be available at `http://localhost:5173`.
+### Technical & Robotics
+- **Technical Analysis**: Engineering data extraction, KPIs, performance metrics
+- **Robot Performance**: Speed, accuracy, efficiency, bottleneck identification
+- **Anomaly Detection**: Irregular movements, safety issues, deviations
+- **HMI/UI Analysis**: Extract data from screens, alarms, status indicators
 
-## Usage
+### General Purpose
+- **AUTO**: Intelligently selects best analysis approach
+- **General**: Comprehensive overview with behavioral insights
+- **Action Recognition**: Movement quality and behavior patterns
+- **Scene Understanding**: Composition, lighting, camera work analysis
 
-1. Open your web browser and go to `http://localhost:5173`.
-2. (Optional) Click the "Clear Cache" button to remove any stored analysis results.
-3. Select a video file using the file input.
-4. Choose an analysis type from the dropdown menu:
-   - General Analysis
-   - UI Interaction Analysis
-   - Emotion Detection
-   - Object Detection
-   - Text Recognition
-   - Custom (allows you to enter a custom prompt)
-5. If you selected "Custom", enter your custom analysis prompt.
-6. Click "Upload and Analyze" to process the video.
-7. For large videos, you'll see a progress bar indicating the upload and processing progress.
-8. Once complete, the app will display:
-   - The filename of the uploaded video
-   - The selected analysis type (and custom prompt if applicable)
-   - For each chunk (if applicable):
-     - The number of frames extracted
-     - The GPT-4 analysis of the video content based on the selected analysis type
-9. You can download the analysis results in JSON, PDF, or Markdown format using the provided download buttons.
+### Specialized
+- **Emotion Recognition**: Facial expressions, body language, emotional journey
+- **Brand Presence**: Logo detection, product placement, brand strategy
+- **Object Detection**: Key objects, positions, movements, interactions
+- **Text Recognition**: OCR for on-screen text and displays
+- **Color Analysis**: Palette analysis and mood assessment
+- **Temporal Analysis**: How content evolves over time
 
-## Features
+### Advanced
+- **Custom**: Enter your own analysis prompt for specific needs
 
-- Video upload and frame extraction using FFmpeg
-- GPT-4 integration for video content analysis
-- User-friendly interface with error handling and loading states
-- Responsive design for various screen sizes
-- Caching mechanism for processed videos to improve performance
-- Support for large video files through chunked uploads and progressive analysis
-- Multiple predefined analysis types and custom prompt option
-- Download analysis results in JSON, PDF, or Markdown format
-- Clear cache functionality to remove stored analysis results
+## 🔧 Configuration
 
-## Troubleshooting
+### Frame Extraction
+Smart extraction with multiple strategies:
+- **Short videos (<20s)**: 1 frame/second
+- **Medium videos (20-90s)**: Dynamic interval (~25-30 frames)
+- **Long videos (>90s)**: Scene change detection + time-based fallback
 
-If you encounter issues:
+Maximum frames: 30 per video (configurable in `main.py`)
 
-1. Ensure FFmpeg is correctly installed and available in your system PATH
-2. Check that your OpenAI API key is correctly set in the `.env` file
-3. Verify that you have sufficient credits in your OpenAI account
-4. Confirm that you have access to the GPT-4 API with vision capabilities
-5. If you're getting unexpected results, try clearing the cache using the "Clear Cache" button
+### Model Settings
+- **Model**: gpt-4o (best vision performance)
+- **Max Tokens**: 4000 (detailed analysis)
+- **Temperature**: 0.7 (balanced creativity/accuracy)
+- **Image Detail**: high (768px max dimension)
 
-For other issues, check the console logs in both the frontend and backend for error messages.
+### Storage
+- **Analysis Cache**: Backend `/cache` directory (temporary)
+- **History**: Browser localStorage (persistent)
+- **Videos**: System temp folder (auto-deleted after analysis)
+- **History Limit**: Last 50 analyses
 
-## Contributing
+## 🛠️ Technical Details
 
-Contributions to improve the app are welcome. Please feel free to submit issues or pull requests.
+### Backend (FastAPI)
+- `/upload` - Main analysis endpoint (file or URL)
+- `/refine` - AI refinement endpoint
+- `/analysis_types` - Get available analysis modes
+- `/clear_cache` - Clear analysis cache
+- CORS enabled for localhost:3000
+- Rate limiting: 30 requests/minute
 
-## License
+### Frontend (React 18)
+- Modern createRoot API
+- FontAwesome icons
+- Axios for API calls
+- localStorage for persistence
+- Responsive CSS with CSS variables
 
-This project is licensed under the MIT License.
+### AI Prompting
+- Expert-level system prompts for sharp analysis
+- Behavioral focus (aggressive, smooth, efficient, etc.)
+- Anti-generic instructions
+- Context-aware refinement prompts
+- Examples of good vs bad analysis
+
+### Video Processing
+- yt-dlp with iOS/Android/Web client fallbacks
+- FFmpeg transcoding for compatibility
+- OpenCV scene change detection
+- Pillow image optimization
+- Automatic cleanup of temp files
+
+## 📊 Performance & Costs
+
+### Frame Processing
+- **Analysis Time**: 15-45 seconds (depending on frames)
+- **Frames Extracted**: 15-30 intelligently selected frames
+- **Frame Quality**: 768px max dimension, 90% JPEG quality
+
+### OpenAI Costs
+- **Average Cost**: $0.02-0.04 per video
+- **Token Usage**: ~8,000-15,000 tokens per analysis
+- **Model**: gpt-4o ($2.50/1M input tokens)
+
+## 🔒 Security & Privacy
+
+- Videos stored temporarily (~10-30 seconds) in system temp folder
+- Automatic deletion after analysis
+- No permanent video storage
+- Analysis results stored locally in browser
+- API key secured via environment variable
+- CORS restricted to localhost
+
+## 🐛 Troubleshooting
+
+### YouTube 403 Errors
+- App uses 4-tier fallback (iOS/Android/Web clients)
+- If URL fails, download video manually and use file upload
+- Success rate: ~70-80% for public videos
+
+### "Blank Page" After Analysis
+- Clear browser cache
+- Click "Reset" button
+- Check browser console for errors
+
+### FFmpeg Not Found
+```bash
+# Verify FFmpeg installation
+ffmpeg -version
+
+# If not found, reinstall and add to PATH
+```
+
+### Out of Memory
+- Reduce max_frames in `main.py` (line 178)
+- Close other applications
+- Use shorter videos or lower resolution
+
+### OpenAI Rate Limits
+- Check your OpenAI account tier
+- Wait a few minutes between requests
+- Upgrade to higher tier if needed
+
+## 📝 Development
+
+### Code Style
+- Senior Staff Engineer approach
+- Minimal documentation (self-documenting code)
+- No unnecessary refactoring
+- Production-ready code only
+
+### Key Files
+- `backend/main.py`: All backend logic, prompts, and endpoints
+- `frontend/src/App.jsx`: Main React component with all UI logic
+- `frontend/src/App.css`: Complete styling with CSS variables
+
+## 🤝 Contributing
+
+Contributions welcome! Please:
+1. Follow existing code style
+2. Test thoroughly before PR
+3. Update README if adding features
+4. No breaking changes without discussion
+
+## 📄 License
+
+MIT License - Use freely for personal or commercial projects
+
+## 🙏 Acknowledgments
+
+- OpenAI GPT-4o for vision capabilities
+- FastAPI for robust backend framework
+- React team for excellent frontend library
+- yt-dlp community for video download support
+- FFmpeg for video processing capabilities
+
+---
+
+**Frame Insight** - Engineered for precision.
+
+For issues or questions, open a GitHub issue or contact the development team.
