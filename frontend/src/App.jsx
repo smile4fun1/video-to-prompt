@@ -19,6 +19,28 @@ const loadingMessages = [
   "Activating multi-modal cognition layers...",
 ];
 
+// User-friendly descriptions for each analysis type
+const ANALYSIS_DESCRIPTIONS = {
+  auto: "Intelligently determines the best analysis approach for your video. Adapts to content type automatically, whether it's robotics, general footage, or specialized content.",
+  general: "Comprehensive overview with behavioral insights and quality assessment. Ideal for understanding overall video content and identifying key patterns.",
+  technical_analysis: "Engineering-focused analysis for robotics and technical systems. Extracts KPIs, movement quality, speed patterns, trajectory precision, and operational anomalies.",
+  ui_interaction: "Tracks user interface interactions and workflow patterns. Documents navigation paths, actions, UI changes, and overall user experience flow.",
+  emotion_recognition: "Analyzes facial expressions, body language, and emotional journey. Identifies mood shifts, dominant emotions, and emotional narrative arc.",
+  object_detection: "Identifies and tracks key objects throughout the video. Analyzes movements, positions, interactions, and object dynamics in the scene.",
+  text_recognition: "Extracts and transcribes all visible text from video frames. Organizes text by context, relevance, and timing.",
+  action_recognition: "Evaluates action quality, execution style, and behavioral patterns. Assesses smoothness, speed, precision, and efficiency of movements.",
+  scene_understanding: "Comprehensive analysis of setting, composition, lighting, and camera work. Examines how visual elements convey the video's message.",
+  color_analysis: "Analyzes color palette, visual style, and mood. Examines dominant colors, transitions, and how color contributes to overall aesthetic.",
+  audio_visual_sync: "Evaluates synchronization between visual and audio elements. Analyzes how they work together (based on visual cues).",
+  temporal_analysis: "Tracks how content evolves over time. Analyzes pacing, transitions, narrative progression, and storytelling flow.",
+  accessibility_assessment: "Evaluates video accessibility. Assesses visual clarity, text readability, color contrast, and ease of understanding.",
+  brand_presence: "Identifies and analyzes brand elements. Evaluates branding strategy, placement consistency, and overall brand message.",
+  robot_performance: "Critical performance analysis for robotic systems. Evaluates speed consistency, approach behavior, path efficiency, timing patterns, and precision.",
+  anomaly_detection: "Identifies irregular behaviors, safety issues, and unexpected events. Detects aggressive movements, near-misses, speed inconsistencies, and path deviations.",
+  hmi_ui_analysis: "Extracts specific data from HMI/UI screens. Reads numerical values, status indicators, alarms, button interactions, and error messages.",
+  custom: "Use your own custom prompt for specialized analysis. Provide detailed instructions for what you want to extract from the video."
+};
+
 function App() {
   const [file, setFile] = useState(null);
   const [url, setUrl] = useState('');
@@ -30,7 +52,6 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState(0);
-  const [analysisTypes, setAnalysisTypes] = useState({});
   const [copySuccess, setCopySuccess] = useState('');
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
   const [isFirstUpload, setIsFirstUpload] = useState(true);
@@ -47,7 +68,6 @@ function App() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    fetchAnalysisTypes();
     loadStateFromStorage();
     loadHistoryFromStorage();
   }, []);
@@ -120,15 +140,6 @@ function App() {
         }, 100);
     }
   }, [result]);
-
-  const fetchAnalysisTypes = async () => {
-    try {
-      const response = await axios.get(`${BACKEND_URL}/analysis_types`);
-      setAnalysisTypes(response.data);
-    } catch (error) {
-      console.error('Error fetching analysis types:', error);
-    }
-  };
 
   const saveToHistory = (analysisData) => {
     try {
@@ -659,16 +670,16 @@ function App() {
                             onChange={(e) => setAnalysisType(e.target.value)}
                             className="modern-select"
                         >
-                            {Object.entries(analysisTypes).map(([key, value]) => (
+                            {Object.entries(ANALYSIS_DESCRIPTIONS).map(([key, value]) => (
                                 <option key={key} value={key}>
                                     {key === 'auto' ? 'AUTO (Recommended)' : key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                                 </option>
                             ))}
                         </select>
                     </div>
-                    {analysisTypes[analysisType] && analysisType !== 'custom' && (
+                    {ANALYSIS_DESCRIPTIONS[analysisType] && analysisType !== 'custom' && (
                         <div className="info-box">
-                            {formatDescription(analysisTypes[analysisType])}
+                            {ANALYSIS_DESCRIPTIONS[analysisType]}
                         </div>
                     )}
                 </div>
